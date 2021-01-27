@@ -1,0 +1,71 @@
+rm(list = ls())
+setwd("~/R")
+#install.packages("RMark")
+library(RMark)
+
+data<-read.csv("popan_final_input_injuries.csv",colClasses=c('character'), header = T)
+
+#View
+head(data)
+data[!complete.cases((data)),]
+tail(data)
+
+data$sex<-as.factor(data$sex)
+#data$res<-as.factor(data$res)
+data$injury<-as.factor(data$injury)
+data$sex[which(data$sex == "U")] <- NA
+
+data$year<- NULL
+data$res<- NULL
+
+#process data for POPAN model, add in predefined time intervals
+capt.pr <- process.data(data,begin.time = 2014, model = "POPAN",
+                        groups =c("sex", "injury"))
+
+#make design data for capt.pr
+capt.ddl<-make.design.data(capt.pr)
+capt.ddl
+
+release.gof(capt.pr)
+
+###parameter settings for models####
+do_analysis=function()
+{
+  # Define model for Phi (survival probabilities to next occasion)
+  Phi.dot=list(formula= ~1)
+  Phi.ti=list(formula=~time+injury)
+  Phi.tis=list(formula=~time+injury+sex)
+  
+  #  Define range of models for p (probability of capture at occasion i)  
+  p.dot = list(formula =  ~ 1)
+  p.i=list(formula=~injury)
+  p.time = list(formula =  ~time)
+  pi.time = list(formula =  ~time+injury)
+  p.is=list(formula=~injury+sex)
+  
+  #  Define model for pent (probability of entry) this should be mlogit link function
+  pent.time = list(formula =  ~time)
+  pent.sex=list(formula=~sex)
+  pent.timesex = list(formula = ~time+sex)
+  pent.dot=list(formula= ~1)  
+  
+  # Define model for N (super population)
+  N.dot = list(formula = ~ 1)
+  N.group= list(formula=~group)
+
+  # create all combinations
+  cml=create.model.list("POPAN")
+  
+  # run all model combinations and return as a list with class marklist
+  results=mark.wrapper(cml,data=capt.pr,ddl=capt.ddl,output=FALSE,silent=TRUE)
+  return(results)
+}
+
+# Run the models:
+short.popan=do_analysis()
+short.popan
+
+#outputs of top model
+summary(short.popan$Phi.ti.p.is.pent.sex.N.dot)
+popan.derived(capt.pr,short.popan$Phi.ti.p.is.pent.sex.N.dot)
+short.popan$Phi.ti.p.is.pent.sex.N.dot$results$real
